@@ -13,13 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-        with:
-          lfs: true
 
       - name: Set the value
         id: step_one
         run: |
-          tag=libra146/docker-topsap:$(echo "${{ github.ref }}" | sed -e "s,.*/\(.*\),\1,")
+          tag=Shuenhoy/docker-topsap:$(echo "${{ github.ref }}" | sed -e "s,.*/\(.*\),\1,")
           echo "TAG_VERSION=$tag" >> "$GITHUB_ENV"
 
       - name: Set up QEMU
@@ -31,7 +29,7 @@ jobs:
       - name: Login to DockerHub
         uses: docker/login-action@v1
         with:
-          username: libra146
+          username: Shuenhoy
           password: ${{ secrets.ACCESS_TOKEN }}
 
       - name: Build and push latest
@@ -40,4 +38,4 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: libra146/docker-topsap:latest
+          tags: Shuenhoy/docker-topsap:latest
