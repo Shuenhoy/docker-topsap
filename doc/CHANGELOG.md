@@ -2,7 +2,7 @@
 
 格式基于 [Keep a Changelog](http://keepachangelog.com/)
 
-## Unreleased
+## 0.2.0 - 2026-10-14
 ### Added
 - 支持短信认证（`AUTH_TYPE=sms`）：内置 Web 控制台，可在网页上获取验证码、提交登录、断开连接，并自动刷新连接状态
 - 隧道状态自动监听：`tun0` 建立 / 断开时自动启停 Socks5（danted）
@@ -10,6 +10,8 @@
 ### Changed
 - 更新 aarch64 版本 TopSAP 到 3.5.2.40.2
 - 修复 Debian buster 官方源已下线导致镜像无法构建的问题（改用 archive 源）
+- 镜像发布从 Docker Hub 改为 GitHub Container Registry（`ghcr.io/shuenhoy/docker-topsap`）
+- 本仓库 fork 自 [libra146/docker-topsap](https://github.com/libra146/docker-topsap)，并适配了相关命名
 
 ### Fixed
 - 修复 Socks5 代理不通：TopSAP 的全局隧道（`0.0.0.0/1` + `128.0.0.0/1` 指向 tun0）会把 **VPN 网关**和 **DNS 服务器**也卷进隧道，导致隧道加密包自环（数据通道不通）、容器 DNS 失效；现在登录前后都会把这两类地址补一条走物理网卡的 /32 路由排除出去
