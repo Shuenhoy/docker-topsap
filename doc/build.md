@@ -5,7 +5,7 @@
 ```bash
 git clone https://github.com/Shuenhoy/docker-topsap
 cd docker-topsap
-docker build -t Shuenhoy/docker-topsap:latest -f Dockerfile .
+docker build -t ghcr.io/shuenhoy/docker-topsap:latest -f Dockerfile .
 ```
 
 构建时会根据当前架构（`uname -m`）自动选择并安装对应的 deb 包：
@@ -25,8 +25,8 @@ docker build -t Shuenhoy/docker-topsap:latest -f Dockerfile .
 
 ## 多架构
 
-仓库的 GitHub Actions（`.github/workflows/docker-publish.yml`）会构建并推送 `linux/amd64` 与 `linux/arm64` 双架构镜像。本地如需构建多架构，可使用：
+仓库的 GitHub Actions（`.github/workflows/docker-publish.yml`）会在推送 `v*` tag 时构建 `linux/amd64` 与 `linux/arm64` 双架构镜像，并推送到 **GitHub Container Registry**（`ghcr.io/shuenhoy/docker-topsap`）。本地如需构建多架构，可使用：
 
 ```bash
-docker buildx build --platform linux/amd64,linux/arm64 -t Shuenhoy/docker-topsap:latest .
+docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/shuenhoy/docker-topsap:latest .
 ```

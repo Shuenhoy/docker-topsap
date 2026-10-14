@@ -3,13 +3,15 @@
 [![Docker-publish](https://github.com/Shuenhoy/docker-topsap/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Shuenhoy/docker-topsap/actions/workflows/docker-publish.yml)
 ![GitHub issues](https://img.shields.io/github/issues/Shuenhoy/docker-topsap)
 ![GitHub repo size](https://img.shields.io/github/repo-size/Shuenhoy/docker-topsap)
-![Docker Pulls](https://img.shields.io/docker/pulls/Shuenhoy/docker-topsap)
+[![GHCR](https://img.shields.io/badge/ghcr.io-shuenhoy%2Fdocker--topsap-2496ED?logo=docker&logoColor=white)](https://github.com/Shuenhoy/docker-topsap/pkgs/container/docker-topsap)
 [![GitHub](https://img.shields.io/github/license/Shuenhoy/docker-topsap)](https://github.com/Shuenhoy/docker-topsap/blob/main/LICENSE)
 
 使天融信开发的 TopSAP 运行在 docker 或 podman 中，并提供 socks5 代理服务，支持口令认证和短信认证（短信认证内置 Web 控制台）。
 
 > 本仓库 **fork 自 [libra146/docker-topsap](https://github.com/libra146/docker-topsap)**，
 > 在原项目基础上增加了 **短信认证（内置 Web 控制台）**，并修复了 Socks5 代理在 TopSAP 全局隧道下不通（网关/DNS 被卷进隧道）等问题。
+>
+> 镜像发布在 **GitHub Container Registry**：`ghcr.io/shuenhoy/docker-topsap`
 
 **本项目基于 天融信 官方“Linux”版的 deb 包制作。这些 deb 包的版权归 天融信 官方所有，请不要滥用本项目。本项目不是天融信官方项目。
 **

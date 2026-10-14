@@ -7,7 +7,7 @@
 1. 安装 Docker。
 
 2. 在终端输入：
-   `docker run -d -it --device /dev/net/tun --cap-add NET_ADMIN -p 127.0.0.1:1088:1080 --name some_name -e USER_NAME=you_name -e PASSWORD=you_password -e SERVER_ADDRESS=you_address Shuenhoy/docker-topsap`
+   `docker run -d -it --device /dev/net/tun --cap-add NET_ADMIN -p 127.0.0.1:1088:1080 --name some_name -e USER_NAME=you_name -e PASSWORD=you_password -e SERVER_ADDRESS=you_address ghcr.io/shuenhoy/docker-topsap`
 
 3. 将以上命令的环境变量替换成对应的用户名密码还有服务器地址。
 
@@ -37,7 +37,7 @@
    docker run -d -it --device /dev/net/tun --cap-add NET_ADMIN \
      -p 127.0.0.1:1088:1080 -p 127.0.0.1:8080:8080 --name some_name \
      -e AUTH_TYPE=sms -e USER_NAME=you_name -e SERVER_ADDRESS=you_address \
-     Shuenhoy/docker-topsap
+     ghcr.io/shuenhoy/docker-topsap
    ```
 
 2. 浏览器打开 <http://127.0.0.1:8080/>，在页面上操作：
@@ -65,7 +65,7 @@
 2. 将服务器地址，账号，密码填写到 .env 文件中对应的位置中。
 
 3. 在终端输入：
-   `docker run -d -it --device /dev/net/tun --cap-add NET_ADMIN -p 127.0.0.1:1088:1080 --name some_name --env-file .env Shuenhoy/docker-topsap`
+   `docker run -d -it --device /dev/net/tun --cap-add NET_ADMIN -p 127.0.0.1:1088:1080 --name some_name --env-file .env ghcr.io/shuenhoy/docker-topsap`
 
 4. 浏览器（或其他支持的应用）可配置socks5代理，地址 127.0.0.1, 端口 1080。
 
