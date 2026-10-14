@@ -6,7 +6,7 @@
 ![Docker Pulls](https://img.shields.io/docker/pulls/libra146/docker-topsap)
 [![GitHub](https://img.shields.io/github/license/libra146/docker-topsap)](https://github.com/libra146/docker-topsap/blob/main/LICENSE)
 
-使天融信开发的 TopSAP 运行在 docker 或 podman 中，并提供 socks5 代理服务
+使天融信开发的 TopSAP 运行在 docker 或 podman 中，并提供 socks5 代理服务，支持口令认证和短信认证（短信认证内置 Web 控制台）。
 
 **本项目基于 天融信 官方“Linux”版的 deb 包制作。这些 deb 包的版权归 天融信 官方所有，请不要滥用本项目。本项目不是天融信官方项目。
 **
