@@ -19,6 +19,7 @@ import http.client
 import json
 import os
 import re
+import socket
 import ssl
 import subprocess
 import threading
@@ -66,26 +67,33 @@ state = {
 lock = threading.Lock()
 # sv_websrv 不支持并发请求（并发时请求会挂起），所有请求串行化
 sv_lock = threading.Lock()
+# 会话存活状态，由 query_status 探测更新（tun0 残留不代表会话还活着）
+session_state = {"alive": None, "vip": "", "ts": 0.0}
 
 
-def _sv_post(path, payload):
-    """调用本机 sv_websrv 的 HTTP 接口（串行化，sv_websrv 不支持并发）"""
+def _sv_request(path, payload, timeout=60):
+    """调用本机 sv_websrv 的 HTTP 接口（不持锁）"""
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
+    conn = http.client.HTTPSConnection(SV_HOST, SV_PORT, context=ctx, timeout=timeout)
+    try:
+        conn.request("POST", path, body=body, headers={
+            "Content-Type": CONTENT_TYPE,
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "User-Agent": USER_AGENT,
+        })
+        resp = conn.getresponse()
+        return resp.read().decode("utf-8", "replace")
+    finally:
+        conn.close()
+
+
+def _sv_post(path, payload):
+    """调用本机 sv_websrv 的 HTTP 接口（串行化，sv_websrv 不支持并发）"""
     with sv_lock:
-        conn = http.client.HTTPSConnection(SV_HOST, SV_PORT, context=ctx, timeout=60)
-        try:
-            conn.request("POST", path, body=body, headers={
-                "Content-Type": CONTENT_TYPE,
-                "Accept": "application/json, text/javascript, */*; q=0.01",
-                "User-Agent": USER_AGENT,
-            })
-            resp = conn.getresponse()
-            return resp.read().decode("utf-8", "replace")
-        finally:
-            conn.close()
+        return _sv_request(path, payload)
 
 
 def _parse_loose(text):
@@ -179,6 +187,72 @@ def _run_async(flag, fn, *args):
     return True
 
 
+def _probe_session(force=False):
+    """通过 query_status 判断会话是否真的活着。
+
+    force=False 时非阻塞获取锁（避免阻塞页面自动轮询）；
+    force=True 时等待锁（用于「手动刷新」）。
+    """
+    if force:
+        sv_lock.acquire()
+    elif not sv_lock.acquire(blocking=False):
+        return
+    try:
+        d = _parse_loose(
+            _sv_request("/api/v1/query_status", {"method": "query_status"}, timeout=6)) or {}
+        vip = d.get("vip", "") or ""
+        alive = vip not in ("", "0.0.0.0")
+        with lock:
+            session_state["alive"] = alive
+            session_state["vip"] = vip if alive else ""
+            session_state["ts"] = time.time()
+    except Exception:
+        pass
+    finally:
+        sv_lock.release()
+
+
+def _sv_ready(timeout=20):
+    """等待 sv_websrv 端口就绪"""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with socket.create_connection((SV_HOST, SV_PORT), timeout=1):
+                return True
+        except OSError:
+            time.sleep(0.5)
+    return False
+
+
+def _restart_sv():
+    """彻底重置 TopSAP 本地服务。
+
+    logout 之后 sv_websrv 会残留旧会话（旧 tun0、卡住的传输连接），
+    直接重新登录会拿不到 Virtual_IP；这里 kill 掉重来一遍。
+    """
+    with sv_lock:
+        try:
+            subprocess.run(["killall", "-q", "sv_websrv"], timeout=10)
+        except Exception:
+            pass
+        time.sleep(1)
+        if os.path.exists("/sys/class/net/tun0"):
+            try:
+                subprocess.run(["ip", "link", "del", "tun0"], timeout=10,
+                               stderr=subprocess.DEVNULL)
+            except Exception:
+                pass
+        try:
+            subprocess.Popen("./sv_websrv >> /home/work/sv_websrv.log 2>&1",
+                             shell=True, cwd="/opt/TopSAP")
+        except Exception:
+            pass
+    _sv_ready()
+    with lock:
+        session_state["alive"] = False
+        session_state["vip"] = ""
+
+
 def _login_payload(method, extra=None):
     """按官方客户端的格式构造请求体"""
     data = _auth_params()
@@ -256,27 +330,21 @@ def logout():
         _sv_post("/api/v1/logout", {"method": "logout"})
     except Exception:
         pass
+    # logout 后 sv_websrv 会残留旧会话，彻底重置，否则无法重新登录
+    _restart_sv()
     with lock:
         state["last_msg"] = "已断开连接"
         state["last_error"] = ""
     return {}
 
 
-def status():
-    # 状态检测只读本地 tun0（不经过 sv_websrv，避免与登录/发送请求并发把 sv_websrv 搞挂）
+def status(force=False):
+    # 用 query_status 判断会话是否真的活着（tun0 残留不代表会话还在）
+    _probe_session(force)
     tun0 = os.path.exists("/sys/class/net/tun0")
-    vip = ""
-    if tun0:
-        try:
-            out = subprocess.check_output(
-                ["ip", "-4", "-o", "addr", "show", "dev", "tun0"],
-                stderr=subprocess.DEVNULL, text=True)
-            m = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", out)
-            if m:
-                vip = m.group(1)
-        except Exception:
-            pass
-    connected = bool(tun0) and vip not in ("", "0.0.0.0")
+    alive = session_state["alive"] is True
+    vip = session_state["vip"] if alive else ""
+    connected = bool(tun0) and alive
     return {
         "server": state["server"],
         "user": state["user"],
@@ -327,6 +395,8 @@ PAGE = """<!DOCTYPE html>
   button:disabled { opacity: .5; cursor: not-allowed; }
   button.ghost { background: #eef1f5; color: #3a3f47; }
   button.danger { background: #fdecec; color: #d93025; width: 100%; }
+  button.mini { padding: 3px 10px; font-size: 12px; font-weight: 500;
+                background: #eef1f5; color: #3a3f47; margin-left: 8px; }
   .msg { margin-top: 16px; min-height: 20px; font-size: 13px; line-height: 1.5; color: #6b7280; }
   .msg.ok { color: #12833b; }
   .msg.err { color: #d93025; }
@@ -338,7 +408,7 @@ PAGE = """<!DOCTYPE html>
   <h1>TopSAP 控制台</h1>
   <div class="row"><span class="k">网关</span><span class="v" id="server">-</span></div>
   <div class="row"><span class="k">用户名</span><span class="v" id="user">-</span></div>
-  <div class="row"><span class="k">状态</span><span class="v"><span id="status" class="badge wait">检测中…</span></span></div>
+  <div class="row"><span class="k">状态</span><span class="v"><span id="status" class="badge wait">检测中…</span><button id="btnRefresh" class="mini" onclick="manualRefresh()" title="手动刷新状态">刷新</button></span></div>
   <div class="row"><span class="k">隧道 IP</span><span class="v" id="vip">-</span></div>
 
   <div class="section" id="smsSection">
@@ -402,9 +472,10 @@ function updateButtons() {
   }
 }
 
-async function refresh() {
+async function refresh(force) {
   try {
-    const d = await (await fetch('/api/status', {cache: 'no-store'})).json();
+    const url = '/api/status' + (force ? '?force=1' : '');
+    const d = await (await fetch(url, {cache: 'no-store'})).json();
     document.getElementById('server').textContent = d.server || '-';
     document.getElementById('user').textContent = d.user || '-';
     document.getElementById('vip').textContent = d.vip || '-';
@@ -421,6 +492,19 @@ async function refresh() {
     else if (d.last_msg) setMsg(d.last_msg, true);
     updateButtons();
   } catch (e) { /* ignore */ }
+}
+
+let refreshing = false;
+async function manualRefresh() {
+  if (refreshing) return;
+  refreshing = true;
+  const btn = document.getElementById('btnRefresh');
+  btn.disabled = true;
+  btn.textContent = '刷新中…';
+  await refresh(true);
+  btn.disabled = false;
+  btn.textContent = '刷新';
+  refreshing = false;
 }
 
 async function call(path, body) {
@@ -493,8 +577,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ("/", "/index.html"):
             self._send(200, PAGE, "text/html; charset=utf-8")
-        elif self.path == "/api/status":
-            self._send(200, json.dumps(status(), ensure_ascii=False))
+        elif self.path.startswith("/api/status"):
+            force = "force=1" in self.path
+            self._send(200, json.dumps(status(force=force), ensure_ascii=False))
         else:
             self._send(404, json.dumps({"ok": False, "error": "not found"}))
 

@@ -2,6 +2,14 @@
 
 格式基于 [Keep a Changelog](http://keepachangelog.com/)
 
+## Unreleased
+### Added
+- Web 控制台新增「刷新」按钮，可手动强制刷新连接状态
+
+### Fixed
+- 修复连接状态误判：之前只看 `tun0` 是否存在，会话掉线后残留的 `tun0` 会导致仍显示「已连接」；现在通过 `query_status` 判断会话是否真的存活
+- 修复断开后无法重新登录：`logout` 后 `sv_websrv` 会残留旧会话（旧 tun0、卡住的传输连接），导致重新登录拿不到 Virtual_IP；现在「断开连接」会彻底重置本地服务
+
 ## 0.2.0 - 2026-10-14
 ### Added
 - 支持短信认证（`AUTH_TYPE=sms`）：内置 Web 控制台，可在网页上获取验证码、提交登录、断开连接，并自动刷新连接状态
