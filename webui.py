@@ -13,6 +13,7 @@
 #   AUTH_TYPE       认证方式（默认 password；sms 时页面显示短信相关按钮）
 #   WEBUI_LISTEN    监听地址，默认 0.0.0.0
 #   WEBUI_PORT      监听端口，默认 8080
+#   SMS_COOLDOWN    两次「获取验证码」的最小间隔秒数，默认 60
 #
 import base64
 import http.client
@@ -30,6 +31,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 SV_HOST = "127.0.0.1"
 SV_PORT = 7443
 CONTENT_TYPE = "application/x-www-form-urlencoded; charset=UTF-8"
+# 两次「获取验证码」之间的最小间隔（秒），避免频繁触发服务端风控
+SMS_COOLDOWN = int(os.environ.get("SMS_COOLDOWN", "60") or 60)
 USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/65.0.3325.181")
 
@@ -52,6 +55,12 @@ ERR_MSG = {
     "-40077": "该账号已在别处登录，请先断开原会话",
     "-40093": "短信认证用户不存在",
     "-40106": "获取用户短信认证信息失败",
+    "-40167": "短信验证码错误次数已达上限，账号被临时锁定，请稍后再试（或联系管理员解锁）",
+    "-40168": "服务器端获取 DHCP 地址失败",
+    "-40016": "密码错误次数过多，账号已被锁定",
+    "-40022": "登录密码已过期",
+    "-40023": "登录密码过于简单，请先修改密码",
+    "-40024": "首次登录，请先修改初始密码",
 }
 
 state = {
@@ -290,11 +299,24 @@ def _err_text(code):
     return ERR_MSG.get(str(code), "错误码 %s" % code)
 
 
+def _check_cooldown():
+    """「获取验证码」冷却检查（同步抛出，便于前端立即看到提示）"""
+    with lock:
+        last = state["sms_sent_at"] or 0
+    remain = int(SMS_COOLDOWN - (time.time() - last))
+    if remain > 0:
+        raise RuntimeError("请等待 %d 秒后再获取验证码（频繁获取会触发服务端锁定）" % remain)
+
+
 def send_sms():
     if not state["user"]:
         raise RuntimeError("未设置 USER_NAME")
     if not state["server"]:
         raise RuntimeError("未设置 SERVER_ADDRESS")
+    _check_cooldown()
+    # 记录“尝试发送”的时间：即使发送失败也进入冷却，避免频繁触发服务端风控
+    with lock:
+        state["sms_sent_at"] = time.time()
     data = _parse_loose(_sv_post("/api/v1/send_sms", _login_payload("send_sms"))) or {}
     ret = data.get("Ret", data.get("err_code"))
     if str(ret) != "0":
@@ -588,6 +610,7 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.rfile.read(length).decode("utf-8", "replace") if length else ""
         try:
             if self.path == "/api/send_sms":
+                _check_cooldown()
                 _run_async("sending", send_sms)
                 self._send(200, json.dumps({"ok": True, "msg": "正在发送验证码…"},
                                            ensure_ascii=False))
