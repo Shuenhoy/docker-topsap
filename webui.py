@@ -367,6 +367,14 @@ def status(force=False):
     alive = session_state["alive"] is True
     vip = session_state["vip"] if alive else ""
     connected = bool(tun0) and alive
+
+    # 会话已失效时不要继续显示「登录成功，隧道已建立」，避免误导
+    msg = state["last_msg"]
+    msg_ok = True
+    if not connected and msg == "登录成功，隧道已建立":
+        msg = "会话已失效，连接已断开，请重新登录"
+        msg_ok = False
+
     return {
         "server": state["server"],
         "user": state["user"],
@@ -375,7 +383,8 @@ def status(force=False):
         "tun0": tun0,
         "vip": vip,
         "sms_sent_at": state["sms_sent_at"],
-        "last_msg": state["last_msg"],
+        "last_msg": msg,
+        "msg_ok": msg_ok,
         "last_error": state["last_error"],
         "sending": state["sending"],
         "logging": state["logging"],
@@ -511,7 +520,7 @@ async function refresh(force) {
     if (d.last_error) setMsg(d.last_error, false);
     else if (sending) setMsg('正在发送验证码…', null);
     else if (logging) setMsg('正在登录…', null);
-    else if (d.last_msg) setMsg(d.last_msg, true);
+    else if (d.last_msg) setMsg(d.last_msg, d.msg_ok !== false);
     updateButtons();
   } catch (e) { /* ignore */ }
 }
